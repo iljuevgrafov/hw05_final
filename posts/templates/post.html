@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+
+<main role="main" class="container">
+    <div class="row">
+        {% include 'author_info.html' with author=author count=count %}
+        <div class="col-md-9">
+                {% include 'post_content.html' with post=post show_add_comments=False %}
+                {% include 'comments.html' with form=form %}
+        </div>
+    </div>
+</main>
+{% endblock %}

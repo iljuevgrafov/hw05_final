@@ -165,19 +165,3 @@ class YatubeTest(TestCase):
         self.assertEqual(Comment.objects.all().count(), 1)
         self.assertRedirects(response, '/auth/login/?next=' + reverse(
             'add_comment', args=[self.second_user.username, post.id]))
-
-    # def test_page_cached(self):
-    #     cache.clear()
-    #     post_text = 'Test post text'
-    #     post_new_text = 'Test post new text'
-    #     self.post = Post.objects.create(
-    #         text=post_text, author=self.user, group=self.group)
-    #     response = self.client.get(reverse('index'))
-    #     post = response.context.get('page')[0]
-    #     print(post.text)
-    #     self.client.post(reverse("post_edit", args=[self.user, self.post.id]), {
-    #                      'text': post_new_text, 'group': self.group.id}, follow=True)
-    #     response = self.client.get(reverse('index'))
-    #     post = response.context.get('page')[0]
-    #     print(post.text)
-    #     self.assertEqual(post1, post2)

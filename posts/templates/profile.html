@@ -3,14 +3,15 @@
 <main role="main" class="container">
 
     <div class="row">
-        {% include 'author_info.html' with author=author count=paginator.count %}
-            <div class="col-md-9">                
+        {% include 'includes/author_info.html' with author=author count=paginator.count profile=True following=following%}
+            <div class="col-md-9">
+
                 {% for post in page %} 
-                    {% include 'post_content.html' with post=post show_add_comments=True %}
+                    {% include 'includes/post_content.html' with post=post show_add_comments=True %}
                 {% endfor %}
 
                 {% if page.has_other_pages %}
-                    {% include "paginator.html" with items=page paginator=paginator %}
+                    {% include "includes/paginator.html" with items=page paginator=paginator %}
                 {% endif %}
         </div>
     </div>

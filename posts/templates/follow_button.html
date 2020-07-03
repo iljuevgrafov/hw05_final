@@ -1,0 +1,14 @@
+    <li class="list-group-item">
+        {% if following == True %}
+        <a class="btn btn-lg btn-light" 
+                href="{% url 'profile_unfollow' author %}" role="button"> 
+                Отписаться 
+        </a> 
+        {% else %}
+        <a class="btn btn-lg btn-primary" 
+                href="{% url 'profile_follow' author %}" role="button">
+        Подписаться 
+        </a>
+        {% endif %}
+    </li>
+

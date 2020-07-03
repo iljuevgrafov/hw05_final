@@ -9,19 +9,13 @@
 {% cache 500 indexcache %}
 
     {% for post in page %}
-        {% load thumbnail %}
-        {% thumbnail post.image "960x339" crop="top" upscale=True as im %}
-            <img class="card-img" src="{{ im.url }}">
-        {% endthumbnail %}
-        <h3>
-        Автор: {{ post.author.get_full_name }}, Дата публикации: {{ post.pub_date|date:"d M Y" }}
-        </h3>
-        {{ post.text|linebreaksbr }}
-        <hr>
+
+        {% include 'includes/post_content.html' with post=post show_add_comments=True %}
+
     {% endfor %}
 
     {% if page.has_other_pages %}
-        {% include "paginator.html" with items=page paginator=paginator %}
+        {% include "includes/paginator.html" with items=page paginator=paginator %}
     {% endif %}
 
 {% endcache %}

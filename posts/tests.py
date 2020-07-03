@@ -1,7 +1,11 @@
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from .models import Post, User, Group, Follow, Comment
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
+from io import BytesIO
+from PIL import Image
+from django.core.files.base import File
 
 
 class YatubeTest(TestCase):
@@ -47,8 +51,10 @@ class YatubeTest(TestCase):
         self.assertEqual(post_on_page.author, post_author)
         self.assertEqual(post_on_page.group, post_group)
 
+    @override_settings(CACHES={
+        'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache', }
+    })
     def test_new_post_on_pages(self):
-        cache.clear()
         post_text = 'Test post text'
         self.post = Post.objects.create(
             text=post_text, author=self.user, group=self.group)
@@ -64,8 +70,10 @@ class YatubeTest(TestCase):
             self.find_on_pages(page_url, self.post.text,
                                self.post.author, self.post.group)
 
+    @override_settings(CACHES={
+        'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache', }
+    })
     def test_post_edit(self):
-        cache.clear()
         post_text = 'Test post text'
         post_new_text = 'New test post text'
         self.post = Post.objects.create(
@@ -90,18 +98,29 @@ class YatubeTest(TestCase):
             reverse('group_posts', args=[self.group.slug]))
         self.assertEqual(response.context['paginator'].count, 0)
 
+    @override_settings(CACHES={
+        'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache', }
+    })
     def test_post_has_image(self):
-        cache.clear()
         post_text = 'Post with image'
-        with open('media/posts/lev2.jpeg', 'rb') as img:
-            response = self.client.post(reverse('new_post'), {
-                'text': post_text, 'author': self.user, 'group': self.group.id, 'image': img}, follow=True)
-        self.post = Post.objects.last()
+        small_gif = (
+            b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21\xf9\x04'
+            b'\x01\x0a\x00\x01\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02'
+            b'\x02\x4c\x01\x00\x3b'
+        )
+
+        img = SimpleUploadedFile(
+            'image.gif', small_gif, content_type='image/gif')
+
+        response = self.client.post(reverse('new_post'), {
+            'text': post_text, 'author': self.user, 'group': self.group.id, 'image': img}, follow=True)
+
+        post = Post.objects.last()
 
         page_urls = [
             reverse('profile', args=[self.user]),
             reverse('index'),
-            reverse('post_view', args=[self.user, self.post.id]),
+            reverse('post_view', args=[self.user, post.id]),
             reverse('group_posts', args=[self.group.slug])
         ]
 
@@ -112,56 +131,78 @@ class YatubeTest(TestCase):
 
     def test_post_not_image(self):
         post_text = 'Post with image'
-        with open('media/posts/tests.py', 'rb') as img:
-            response = self.client.post(reverse('new_post'), {
-                'text': post_text, 'author': self.user, 'group': self.group.id, 'image': img}, follow=True)
+        img = SimpleUploadedFile(
+            'image.gif', b"some content", content_type='image/gif')
+        response = self.client.post(reverse('new_post'), {
+                                    'text': post_text, 'author': self.user, 'group': self.group.id, 'image': img}, follow=True)
         self.assertFormError(response, 'form', 'image', [
                              'Загрузите правильное изображение. Файл, который вы загрузили, поврежден или не является изображением.'])
 
-    def test_follow_unfollow(self):
-        self.user2 = User.objects.create_user(
+    def test_follow(self):
+        user2 = User.objects.create_user(
             username="testuser2", email="test2@mail.com", password="12345")
         self.client.post(
-            reverse('profile_follow', args=[self.user2.username]), follow=True)
-        follow_obj = Follow.objects.filter(
-            user=self.user, author=self.user2).last()
-        self.assertIsNotNone(follow_obj)
+            reverse('profile_follow', args=[user2.username]), follow=True)
+        follow_obj = Follow.objects.filter(user=self.user, author=user2)
+        self.assertEqual(follow_obj.count(), 1)
+        self.assertEqual(follow_obj[0].user, self.user)
+        self.assertEqual(follow_obj[0].author, user2)
 
+    def test_unfollow(self):
+        user2 = User.objects.create_user(
+            username="testuser2", email="test2@mail.com", password="12345")
+        Follow.objects.create(user=self.user, author=user2)
         self.client.post(
-            reverse('profile_unfollow', args=[self.user2.username]), follow=True)
+            reverse('profile_unfollow', args=[user2.username]), follow=True)
         follow_obj = Follow.objects.filter(
-            user=self.user, author=self.user2).last()
-        self.assertIsNone(follow_obj)
+            user=self.user, author=user2)
+        self.assertEqual(follow_obj.count(), 0)
 
-    def test_new_post_in_follow(self):
-        self.user_w_posts = User.objects.create_user(
+    def test_follower_has_new_post(self):
+        user_w_posts = User.objects.create_user(
             username="user_w_posts", email="user_w_posts@mail.com", password="12345")
-        self.second_user = User.objects.create_user(
-            username="second_user", email="second_user@mail.com", password="12345")
         self.client.post(
-            reverse('profile_follow', args=[self.user_w_posts.username]), follow=True)
+            reverse('profile_follow', args=[user_w_posts.username]), follow=True)
         post = Post.objects.create(
-            text='some text', author=self.user_w_posts, group=self.group)
-        response = self.client.get(reverse('follow_index'))
-        self.assertIn(post, response.context['page'])
+            text='some text', author=user_w_posts, group=self.group)
+        self.find_on_pages(reverse('follow_index'),
+                           post.text, post.author, post.group)
 
-        self.client.force_login(self.second_user)
+    def test_not_follower_has_not_new_post(self):
+        user_w_posts = User.objects.create_user(
+            username="user_w_posts", email="user_w_posts@mail.com", password="12345")
+
+        post = Post.objects.create(
+            text='some text', author=user_w_posts, group=self.group)
+
+        self.assertEqual(False, Follow.objects.filter(
+            user=self.user, author=user_w_posts).exists())
+
         response = self.client.get(reverse('follow_index'))
         self.assertNotIn(post, response.context['page'])
 
-    def test_comment_notauth(self):
-        self.second_user = User.objects.create_user(
+    def test_comment_auth(self):
+        second_user = User.objects.create_user(
             username="second_user", email="second_user@mail.com", password="12345")
         post = Post.objects.create(
-            text='some text', author=self.second_user, group=self.group)
+            text='some text', author=second_user, group=self.group)
         comment_text = 'comment1'
 
         self.client.post(reverse(
-            'add_comment', args=[self.second_user.username, post.id]), {'text': comment_text})
+            'add_comment', args=[second_user.username, post.id]), {'text': comment_text})
         self.assertEqual(Comment.objects.all().count(), 1)
 
+    def test_comment_notauth(self):
+        second_user = User.objects.create_user(
+            username="second_user", email="second_user@mail.com", password="12345")
+        post = Post.objects.create(
+            text='some text', author=second_user, group=self.group)
+        comment_text = 'comment1'
+
+        self.client.post(reverse(
+            'add_comment', args=[second_user.username, post.id]), {'text': comment_text})
         response = self.client_no_auth.post(reverse(
-            'add_comment', args=[self.second_user.username, post.id]), {'text': comment_text}, follow=True)
+            'add_comment', args=[second_user.username, post.id]), {'text': comment_text}, follow=True)
         self.assertEqual(Comment.objects.all().count(), 1)
         self.assertRedirects(response, '/auth/login/?next=' + reverse(
-            'add_comment', args=[self.second_user.username, post.id]))
+            'add_comment', args=[second_user.username, post.id]))

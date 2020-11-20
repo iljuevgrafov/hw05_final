@@ -1,8 +1,12 @@
 from django.urls import path
+from rest_framework.authtoken import views as rest_views
 
 from . import views
 
 urlpatterns = [
+    path('api-token-auth/', rest_views.obtain_auth_token),
+    path('api/v1/posts/<int:id>/', views.APIPostDetail.as_view()),
+    path('api/v1/posts/', views.APIPost.as_view()),
     path("follow/", views.follow_index, name="follow_index"),
     path("<str:username>/follow/", views.profile_follow, name="profile_follow"),
     path("<str:username>/unfollow/",
